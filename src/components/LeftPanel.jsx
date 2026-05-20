@@ -10,10 +10,6 @@ export default function LeftPanel({
   onAutoOrient,
   onReset,
   onAnteriorFacingMe,
-  wireframe,
-  onWireframe,
-  showGrid,
-  onShowGrid,
 }) {
   const inputRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
@@ -122,24 +118,6 @@ export default function LeftPanel({
         </button>
       </div>
 
-      {/* Display */}
-      <div className="panel-section">
-        <div className="section-label">Display</div>
-        <div className="toggle-row">
-          <span className="toggle-label">Wireframe</span>
-          <label className="toggle">
-            <input type="checkbox" checked={wireframe} onChange={e => onWireframe(e.target.checked)} />
-            <span className="toggle-slider" />
-          </label>
-        </div>
-        <div className="toggle-row">
-          <span className="toggle-label">Grid floor</span>
-          <label className="toggle">
-            <input type="checkbox" checked={showGrid} onChange={e => onShowGrid(e.target.checked)} />
-            <span className="toggle-slider" />
-          </label>
-        </div>
-      </div>
       {/* Instructions modal */}
       {showInstructions && (
         <div className="modal-overlay" onClick={() => setShowInstructions(false)}>
