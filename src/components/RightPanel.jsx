@@ -116,7 +116,7 @@ export default function RightPanel({
 
       {/* Export */}
       <div className="panel-section">
-        <div className="section-label">Export</div>
+        <div className="section-label"><span className="step-badge">5</span>Export</div>
         <button className="btn btn-primary" disabled={!analysis} onClick={onExport}>
           Download STL
         </button>

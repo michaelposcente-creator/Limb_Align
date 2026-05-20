@@ -39,7 +39,7 @@ export default function LeftPanel({
 
       {/* Marker download */}
       <div className="panel-section">
-        <div className="section-label">Scan Marker</div>
+        <div className="section-label"><span className="step-badge">1</span>Scan Marker</div>
         <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginBottom: 10, lineHeight: 1.5 }}>
           Print and attach this marker to the patient before scanning.
         </p>
@@ -51,7 +51,7 @@ export default function LeftPanel({
 
       {/* Scan File */}
       <div className="panel-section">
-        <div className="section-label">Scan File</div>
+        <div className="section-label"><span className="step-badge">2</span>Scan File</div>
         {!fileName ? (
           <div
             className={`upload-zone ${dragOver ? 'drag-over' : ''}`}
@@ -85,7 +85,7 @@ export default function LeftPanel({
 
       {/* Auto Orientation */}
       <div className="panel-section">
-        <div className="section-label">Auto Orientation</div>
+        <div className="section-label"><span className="step-badge">3</span>Auto Orientation</div>
         {loaderMsg ? (
           <div className="loader-stages">
             <div className="loader-spinner" />
@@ -105,7 +105,7 @@ export default function LeftPanel({
 
       {/* Anterior Correction */}
       <div className="panel-section">
-        <div className="section-label">Anterior Correction</div>
+        <div className="section-label"><span className="step-badge">4</span>Anterior Correction</div>
         <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginBottom: 10, lineHeight: 1.5 }}>
           Rotate the limb so the anterior face is pointing toward you, then click the button below.
         </p>
