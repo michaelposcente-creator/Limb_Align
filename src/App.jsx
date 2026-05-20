@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
+import { version } from '../package.json';
 import * as THREE from 'three';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
 import LeftPanel from './components/LeftPanel.jsx';
@@ -269,6 +270,12 @@ export default function App() {
       </div>
 
       {error && <div className="error-toast">Error: {error}</div>}
+
+      <footer className="app-footer">
+        <span>v{version}</span>
+        <span className="footer-divider">·</span>
+        <span>Updated {__BUILD_DATE__}</span>
+      </footer>
     </div>
   );
 }
