@@ -17,6 +17,7 @@ export default function LeftPanel({
 }) {
   const inputRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
 
   const handleFile = (file) => {
     if (!file) return;
@@ -28,8 +29,30 @@ export default function LeftPanel({
     if (LeftPanel._onFile) LeftPanel._onFile(file);
   };
 
+  const markerHref = `${import.meta.env.BASE_URL}marker.stl`;
+
   return (
     <aside className="left-panel">
+
+      {/* Instructions button */}
+      <div className="panel-section" style={{ paddingBottom: 10 }}>
+        <button className="btn btn-secondary" onClick={() => setShowInstructions(true)}>
+          How to Use / Demo
+        </button>
+      </div>
+
+      {/* Marker download */}
+      <div className="panel-section">
+        <div className="section-label">Scan Marker</div>
+        <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginBottom: 10, lineHeight: 1.5 }}>
+          Print and attach this marker to the patient before scanning.
+        </p>
+        <a className="btn btn-secondary" href={markerHref} download="limb-align-marker.stl"
+          style={{ textAlign: 'center', textDecoration: 'none', display: 'block' }}>
+          Download Marker STL
+        </a>
+      </div>
+
       {/* Scan File */}
       <div className="panel-section">
         <div className="section-label">Scan File</div>
@@ -117,6 +140,40 @@ export default function LeftPanel({
           </label>
         </div>
       </div>
+      {/* Instructions modal */}
+      {showInstructions && (
+        <div className="modal-overlay" onClick={() => setShowInstructions(false)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <span className="modal-title">How to Use Limb Align</span>
+              <button className="modal-close" onClick={() => setShowInstructions(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <ol className="instructions-list">
+                <li>
+                  <strong>Download & print the marker</strong> — use the Download Marker STL button and attach it to the patient at a known anatomical landmark before scanning.
+                </li>
+                <li>
+                  <strong>Scan the limb</strong> — capture the scan with the marker visible. Export as STL or OBJ.
+                </li>
+                <li>
+                  <strong>Load the scan</strong> — drag and drop your file into the Scan File area, or click to browse.
+                </li>
+                <li>
+                  <strong>Auto-Orient</strong> — click Auto-Orient Scan to align the limb along the standard anatomical axes.
+                </li>
+                <li>
+                  <strong>Anterior Correction</strong> — rotate the view so the anterior face points toward you, then click Anterior Facing Me.
+                </li>
+                <li>
+                  <strong>Export</strong> — download the oriented scan as an STL from the right panel.
+                </li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      )}
+
     </aside>
   );
 }
