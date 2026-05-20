@@ -29,7 +29,7 @@ export default function LeftPanel({
     if (LeftPanel._onFile) LeftPanel._onFile(file);
   };
 
-  const markerHref = `${import.meta.env.BASE_URL}marker.stl`;
+  const markerHref = 'https://raw.githubusercontent.com/michaelposcente-creator/Limb_Align/main/public/marker.stl';
 
   return (
     <aside className="left-panel">
