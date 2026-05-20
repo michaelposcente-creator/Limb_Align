@@ -29,6 +29,7 @@ const Viewport3D = forwardRef(function Viewport3D({
   resetViewKey,
   showGrid,
   statusMsg,
+  markerRegion,
 }, ref) {
   const mountRef = useRef(null);
   const threeRef = useRef(null);
@@ -143,7 +144,7 @@ const Viewport3D = forwardRef(function Viewport3D({
     });
     observer.observe(mount);
 
-    threeRef.current = { scene, camera, renderer, controls, mesh: null, animId, xyGrid };
+    threeRef.current = { scene, camera, renderer, controls, mesh: null, animId, xyGrid, markerHighlight: null };
 
     return () => {
       cancelAnimationFrame(animId);
@@ -221,6 +222,60 @@ const Viewport3D = forwardRef(function Viewport3D({
     if (!three?.mesh) return;
     three.mesh.material.wireframe = wireframe;
   }, [wireframe]);
+
+  // Marker region highlight
+  useEffect(() => {
+    const three = threeRef.current;
+    if (!three) return;
+
+    // Remove previous highlight
+    if (three.markerHighlight) {
+      three.scene.remove(three.markerHighlight);
+      three.markerHighlight.children.forEach(c => {
+        c.geometry?.dispose();
+        c.material?.dispose();
+      });
+      three.markerHighlight = null;
+    }
+
+    if (!markerRegion) return;
+
+    const group = new THREE.Group();
+
+    // Glowing sphere shell
+    const sphereGeo = new THREE.SphereGeometry(markerRegion.radius * 1.05, 32, 32);
+    const sphereMat = new THREE.MeshBasicMaterial({
+      color: 0xff8c00,
+      transparent: true,
+      opacity: 0.18,
+      side: THREE.FrontSide,
+      depthWrite: false,
+    });
+    group.add(new THREE.Mesh(sphereGeo, sphereMat));
+
+    // Wireframe ring
+    const wireMat = new THREE.MeshBasicMaterial({
+      color: 0xff8c00,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+    });
+    const wireGeo = new THREE.SphereGeometry(markerRegion.radius * 1.06, 16, 16);
+    group.add(new THREE.Mesh(wireGeo, wireMat));
+
+    // Point cloud of detected vertices
+    if (markerRegion.vertexPositions) {
+      const ptGeo = new THREE.BufferGeometry();
+      ptGeo.setAttribute('position', new THREE.BufferAttribute(markerRegion.vertexPositions, 3));
+      const ptMat = new THREE.PointsMaterial({ color: 0xff8c00, size: 2.5, sizeAttenuation: true });
+      group.add(new THREE.Points(ptGeo, ptMat));
+    }
+
+    group.position.copy(markerRegion.center);
+    three.scene.add(group);
+    three.markerHighlight = group;
+  }, [markerRegion]);
 
   // Grid visibility toggle
   useEffect(() => {

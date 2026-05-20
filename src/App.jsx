@@ -11,6 +11,7 @@ import {
   applyTransformToGeometry,
   computeVolumeOfLargestComponent,
 } from './lib/meshAnalysis.js';
+import { loadMarkerGeometry, detectMarkerInScan } from './lib/markerDetection.js';
 
 function fmtFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -40,6 +41,7 @@ export default function App() {
   const [orientStatus, setOrientStatus] = useState('none');
   const [orientMethod, setOrientMethod] = useState(null);
   const [resetViewKey, setResetViewKey] = useState(0);
+  const [markerRegion, setMarkerRegion] = useState(null);
 
   const viewportRef = useRef(null);
 
@@ -71,6 +73,7 @@ export default function App() {
     setOrientStatus('none');
     setOrientMethod(null);
     setAnteriorAngle(0);
+    setMarkerRegion(null);
     setStatusMsg(null);
     try {
       const geo = await loadFile(file);
@@ -137,6 +140,30 @@ export default function App() {
         setOrientMethod('Auto-PCA');
         setStatusMsg('Auto-orientation complete');
         setResetViewKey(k => k + 1);
+
+        // Marker detection — non-blocking, failure is silent
+        try {
+          setLoaderMsg('Detecting marker...');
+          await delay(100);
+          const markerGeo = await loadMarkerGeometry();
+          const detection = detectMarkerInScan(geometry, markerGeo);
+          if (detection) {
+            // Pack the detected vertex positions for the point cloud overlay
+            const pos = geometry.attributes.position.array;
+            const pts = new Float32Array(detection.vertexIndices.length * 3);
+            detection.vertexIndices.forEach((vi, i) => {
+              pts[i * 3]     = pos[vi * 3];
+              pts[i * 3 + 1] = pos[vi * 3 + 1];
+              pts[i * 3 + 2] = pos[vi * 3 + 2];
+            });
+            setMarkerRegion({ ...detection, vertexPositions: pts });
+            setStatusMsg('Auto-orientation complete · Marker detected');
+          } else {
+            setMarkerRegion(null);
+          }
+        } catch {
+          setMarkerRegion(null);
+        }
       } finally {
         setLoaderMsg(null);
         setLoading(false);
@@ -150,6 +177,7 @@ export default function App() {
     setOrientStatus('none');
     setOrientMethod(null);
     setAnteriorAngle(0);
+    setMarkerRegion(null);
     setStatusMsg('Reset to original');
   }, []);
 
@@ -229,6 +257,7 @@ export default function App() {
           resetViewKey={resetViewKey}
           showGrid={showGrid}
           statusMsg={statusMsg}
+          markerRegion={markerRegion}
         />
 
         <RightPanel
