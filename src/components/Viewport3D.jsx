@@ -61,12 +61,7 @@ const Viewport3D = forwardRef(function Viewport3D({
     currentPosRef.current = transformedPositions || geometry?.attributes.position.array || null;
   }, [geometry, transformedPositions]);
 
-  // Disable orbit controls while in edit mode
-  useEffect(() => {
-    const three = threeRef.current;
-    if (!three) return;
-    three.controls.enabled = !editMode;
-  }, [editMode]);
+  // In edit mode, orbit stays on — lasso takes over only while Shift is held
 
   // SVG lasso — set up once, reads live refs on each event
   useEffect(() => {
@@ -82,13 +77,15 @@ const Viewport3D = forwardRef(function Viewport3D({
     }
 
     function onDown(e) {
-      if (!editModeRef.current || e.button !== 0) return;
+      if (!editModeRef.current || e.button !== 0 || !e.shiftKey) return;
       e.preventDefault();
-      points  = [getXY(e)];
-      polyEl  = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-      polyEl.setAttribute('fill',         'rgba(255,140,0,0.12)');
-      polyEl.setAttribute('stroke',       '#ffa500');
-      polyEl.setAttribute('stroke-width', '1.5');
+      // Disable orbit while lasso is active
+      if (threeRef.current) threeRef.current.controls.enabled = false;
+      points = [getXY(e)];
+      polyEl = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      polyEl.setAttribute('fill',             'rgba(255,140,0,0.12)');
+      polyEl.setAttribute('stroke',           '#ffa500');
+      polyEl.setAttribute('stroke-width',     '1.5');
       polyEl.setAttribute('stroke-dasharray', '5,3');
       svg.appendChild(polyEl);
     }
@@ -100,6 +97,8 @@ const Viewport3D = forwardRef(function Viewport3D({
     }
 
     function onUp() {
+      // Re-enable orbit whether or not we were lassoeing
+      if (threeRef.current) threeRef.current.controls.enabled = true;
       if (!polyEl) return;
       svg.removeChild(polyEl);
       polyEl = null;
@@ -427,7 +426,7 @@ const Viewport3D = forwardRef(function Viewport3D({
       <svg
         ref={svgRef}
         className="lasso-svg"
-        style={{ cursor: editMode ? 'crosshair' : 'inherit' }}
+        style={{ cursor: editMode ? 'default' : 'inherit' }}
       />
     </div>
   );

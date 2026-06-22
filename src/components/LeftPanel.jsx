@@ -144,7 +144,7 @@ export default function LeftPanel({
         <div className="panel-section edit-mode-panel">
           <div className="section-label edit-mode-label">Edit Geometry</div>
           <p className="edit-mode-hint">
-            Draw a lasso around the geometry you want to remove, then click Delete.
+            Drag normally to orbit. Hold <strong>Shift</strong> and drag to draw a lasso, then click Delete.
           </p>
           <button
             className="btn btn-danger"
