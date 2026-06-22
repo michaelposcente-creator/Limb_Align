@@ -1,0 +1,399 @@
+\documentclass[11pt, a4paper]{article}
+\usepackage{amsmath, amssymb, bm}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+\usepackage{titlesec}
+
+\geometry{margin=2.5cm}
+
+\definecolor{accent}{RGB}{30, 140, 100}
+\titleformat{\section}{\large\bfseries\color{accent}}{}{0em}{}[\titlerule]
+\titleformat{\subsection}{\normalsize\bfseries}{}{0em}{}
+
+\title{\textbf{Limb Align — Alignment Mathematics}\\[0.4em]
+  \large Reference document for the auto-orientation pipeline}
+\author{Limb Align}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\vspace{1em}
+
+This document describes every mathematical operation performed when a user
+clicks \textit{Auto Orient}.  The pipeline runs entirely in the browser using
+JavaScript and Three.js.  Notation: bold lowercase $\bm{v}$ denotes a 3-D
+column vector; bold uppercase $\bm{M}$ denotes a matrix.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Principal Component Analysis (PCA)}
+
+\subsection{Centroid}
+
+Given $n$ vertex positions $\bm{p}_1, \ldots, \bm{p}_n \in \mathbb{R}^3$, the
+centroid is
+
+\begin{equation}
+  \bar{\bm{p}} = \frac{1}{n} \sum_{i=1}^{n} \bm{p}_i
+\end{equation}
+
+\subsection{Covariance matrix}
+
+The $3 \times 3$ covariance matrix of the mean-subtracted vertex cloud is
+
+\begin{equation}
+  \bm{C} = \frac{1}{n} \sum_{i=1}^{n}
+    (\bm{p}_i - \bar{\bm{p}})\,(\bm{p}_i - \bar{\bm{p}})^{\!\top}
+  =
+  \begin{pmatrix}
+    c_{xx} & c_{xy} & c_{xz} \\
+    c_{xy} & c_{yy} & c_{yz} \\
+    c_{xz} & c_{yz} & c_{zz}
+  \end{pmatrix}
+\end{equation}
+
+Because the matrix is real and symmetric, its eigenvectors are orthogonal and
+its eigenvalues are real and non-negative.
+
+\subsection{Power iteration — dominant eigenvector}
+
+The dominant eigenvector (the direction of greatest variance, i.e.\ the
+\emph{long axis} of the limb) is found by repeated multiplication and
+re-normalisation, starting from $\bm{v}_0 = (0.577,\, 0.577,\, 0.577)^\top$:
+
+\begin{equation}
+  \bm{v}_{k+1} = \frac{\bm{C}\,\bm{v}_k}{\|\bm{C}\,\bm{v}_k\|},
+  \qquad k = 0, 1, \ldots, 63
+\end{equation}
+
+After 64 iterations the sequence has converged to the dominant eigenvector
+$\hat{\bm{l}}$ (unit long axis).
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Proximal/Distal Detection}
+
+\subsection{Projection onto the long axis}
+
+Every vertex is projected onto the long axis to find the two extremal points:
+
+\begin{equation}
+  s_i = (\bm{p}_i - \bar{\bm{p}}) \cdot \hat{\bm{l}}
+\end{equation}
+
+\begin{equation}
+  \bm{e}_A = \bm{p}_{\,\arg\min_i\, s_i},
+  \qquad
+  \bm{e}_B = \bm{p}_{\,\arg\max_i\, s_i}
+\end{equation}
+
+\subsection{Local radius at each endpoint}
+
+The local radius at an endpoint $\bm{e}$ is the mean 3-D distance to all
+vertices whose projection falls within 10\% of the total limb length of the
+endpoint's projection:
+
+\begin{equation}
+  r(\bm{e}) = \frac{1}{|N(\bm{e})|}
+              \sum_{i \in N(\bm{e})} \|\bm{p}_i - \bm{e}\|,
+  \qquad
+  N(\bm{e}) = \bigl\{\, i \;\big|\;
+    \bigl| s_i - (\bm{e} \cdot \hat{\bm{l}}) \bigr| < 0.1\,(s_{\max} - s_{\min})
+  \bigr\}
+\end{equation}
+
+\subsection{Distal end identification}
+
+The distal end is the terminus with the \emph{smaller} local radius (anatomically,
+the narrower end of a residual limb):
+
+\begin{equation}
+  \bm{e}_{\mathrm{distal}} =
+  \begin{cases}
+    \bm{e}_A & \text{if } r(\bm{e}_A) < r(\bm{e}_B) \\
+    \bm{e}_B & \text{otherwise}
+  \end{cases}
+\end{equation}
+
+\subsection{Orientation confidence}
+
+The confidence metric quantifies how asymmetric the two end radii are.  A
+limb that tapers strongly gives a high confidence score:
+
+\begin{equation}
+  c = \left(1 - \frac{\min(r_A,\, r_B)}{\max(r_A,\, r_B)}\right) \times 100\%
+\end{equation}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Anatomical Axis Construction}
+
+\subsection{Z-axis (proximal direction)}
+
+The proximal $+Z$ axis points from the distal end toward the proximal end along
+the long axis.  Starting from the raw long axis $\hat{\bm{l}}$:
+
+\begin{equation}
+  \hat{\bm{z}}_{\mathrm{raw}} =
+  \begin{cases}
+    \hat{\bm{l}}  & \text{if } \bm{e}_A \text{ is distal} \\
+    -\hat{\bm{l}} & \text{if } \bm{e}_B \text{ is distal}
+  \end{cases}
+\end{equation}
+
+Then the sign is checked so that $\hat{\bm{z}}$ points \emph{away from} the
+distal end:
+
+\begin{equation}
+  \hat{\bm{z}} =
+  \begin{cases}
+    -\hat{\bm{z}}_{\mathrm{raw}}
+      & \text{if } \hat{\bm{z}}_{\mathrm{raw}} \cdot
+        (\bm{e}_{\mathrm{distal}} - \bar{\bm{p}}) > 0 \\
+    \hat{\bm{z}}_{\mathrm{raw}} & \text{otherwise}
+  \end{cases}
+\end{equation}
+
+\subsection{Anterior direction via surface-normal sector analysis}
+
+An orthonormal reference frame perpendicular to $\hat{\bm{z}}$ is built using
+Gram-Schmidt:
+
+\begin{equation}
+  \hat{\bm{b}}_x = \mathrm{normalise}\!\left(
+    \bm{t} - (\bm{t} \cdot \hat{\bm{z}})\,\hat{\bm{z}}
+  \right),
+  \qquad \bm{t} =
+  \begin{cases}
+    (1,0,0)^\top & \text{if } |\hat{z}_x| < 0.9 \\
+    (0,1,0)^\top & \text{otherwise}
+  \end{cases}
+\end{equation}
+
+\begin{equation}
+  \hat{\bm{b}}_y = \hat{\bm{z}} \times \hat{\bm{b}}_x
+\end{equation}
+
+For each vertex normal $\hat{\bm{n}}_i$, the component perpendicular to
+$\hat{\bm{z}}$ is:
+
+\begin{equation}
+  \bm{n}_i^\perp = \hat{\bm{n}}_i - (\hat{\bm{n}}_i \cdot \hat{\bm{z}})\,\hat{\bm{z}}
+\end{equation}
+
+This is projected into the 36-sector angular histogram:
+
+\begin{equation}
+  \theta_i = \mathrm{atan2}\!\left(
+    \bm{n}_i^\perp \cdot \hat{\bm{b}}_y,\;
+    \bm{n}_i^\perp \cdot \hat{\bm{b}}_x
+  \right), \qquad \theta_i \in (-\pi, \pi]
+\end{equation}
+
+\begin{equation}
+  s_i = \left\lfloor \frac{\theta_i + \pi}{2\pi} \cdot 36 \right\rfloor
+        \bmod 36
+\end{equation}
+
+Each sector $s$ accumulates the mean perpendicular normal magnitude:
+
+\begin{equation}
+  \mathrm{score}(s) = \frac{1}{|s|} \sum_{i\,:\,s_i = s} \|\bm{n}_i^\perp\|
+\end{equation}
+
+The sector with the highest score gives the raw anterior angle:
+
+\begin{equation}
+  s^* = \arg\max_s\; \mathrm{score}(s),
+  \qquad
+  \theta^* = \frac{s^* + 0.5}{36} \cdot 2\pi - \pi
+\end{equation}
+
+\begin{equation}
+  \hat{\bm{x}}_{\mathrm{raw}} =
+    \cos\theta^*\;\hat{\bm{b}}_x + \sin\theta^*\;\hat{\bm{b}}_y
+\end{equation}
+
+\subsection{Final orthonormal basis}
+
+The raw anterior direction is orthogonalised against $\hat{\bm{z}}$ (to remove
+any residual component along the long axis), then the medial axis is derived by
+the right-hand rule:
+
+\begin{equation}
+  \hat{\bm{x}} = \mathrm{normalise}\!\left(
+    \hat{\bm{x}}_{\mathrm{raw}}
+    - (\hat{\bm{x}}_{\mathrm{raw}} \cdot \hat{\bm{z}})\,\hat{\bm{z}}
+  \right)
+\end{equation}
+
+\begin{equation}
+  \hat{\bm{y}} = \hat{\bm{z}} \times \hat{\bm{x}}
+\end{equation}
+
+The resulting frame uses the convention:
+
+\begin{center}
+\begin{tabular}{ll}
+  \toprule
+  Axis & Direction \\
+  \midrule
+  $+X$ & Anterior \\
+  $+Y$ & Medial   \\
+  $+Z$ & Proximal (up) \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Orientation Transform}
+
+\subsection{Rotation matrix}
+
+The three axis vectors are assembled as columns of a rotation matrix:
+
+\begin{equation}
+  \bm{R} = \bigl[\,\hat{\bm{x}} \;\big|\; \hat{\bm{y}} \;\big|\; \hat{\bm{z}}\,\bigr]
+  \in SO(3)
+\end{equation}
+
+Because $\bm{R}$ is orthonormal, its inverse is its transpose:
+$\bm{R}^{-1} = \bm{R}^\top$.
+
+\subsection{Full 4$\times$4 homogeneous transform}
+
+The final transform translates the distal end to the origin and then applies
+the inverse rotation to align the limb with the world axes:
+
+\begin{equation}
+  \bm{T}_{-\bm{e}} =
+  \begin{pmatrix}
+    1 & 0 & 0 & -e_x \\
+    0 & 1 & 0 & -e_y \\
+    0 & 0 & 1 & -e_z \\
+    0 & 0 & 0 & 1
+  \end{pmatrix},
+  \qquad \bm{e} = \bm{e}_{\mathrm{distal}}
+\end{equation}
+
+\begin{equation}
+  \boxed{\bm{M} = \bm{R}^\top \bm{T}_{-\bm{e}}}
+\end{equation}
+
+\subsection{Applying the transform to vertices}
+
+Each vertex position is transformed in homogeneous coordinates:
+
+\begin{equation}
+  \bm{p}_i' =
+  \bm{M}
+  \begin{pmatrix} \bm{p}_i \\ 1 \end{pmatrix}
+  = \bm{R}^\top (\bm{p}_i - \bm{e}_{\mathrm{distal}})
+\end{equation}
+
+After transformation: the distal tip sits at the origin $(0,0,0)$, the
+proximal end is along $+Z$, and the anterior face points toward $+X$.
+
+\subsection{Anterior correction (manual)}
+
+When the user clicks \textit{Anterior Facing Me}, the camera's current angle
+$\phi$ in the $XY$-plane is used to apply a further rotation about $Z$:
+
+\begin{equation}
+  \bm{R}_Z(\phi) =
+  \begin{pmatrix}
+    \cos\phi & -\sin\phi & 0 \\
+    \sin\phi &  \cos\phi & 0 \\
+    0        & 0         & 1
+  \end{pmatrix}
+\end{equation}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Mesh Volume}
+
+The volume of the largest connected body is computed via the
+\emph{signed-tetrahedron} (divergence theorem) method.  For each triangular
+face with vertices $\bm{a}, \bm{b}, \bm{c}$, the signed scalar triple product
+gives the volume of the tetrahedron formed with the origin:
+
+\begin{equation}
+  V_f = \bm{a} \cdot (\bm{b} \times \bm{c})
+      = a_x(b_y c_z - b_z c_y)
+      + b_x(c_y a_z - c_z a_y)
+      + c_x(a_y b_z - a_z b_y)
+\end{equation}
+
+Summing over all faces belonging to the largest connected component and taking
+the absolute value:
+
+\begin{equation}
+  V = \frac{1}{6}\left|\sum_{f} V_f\right|
+  \quad \text{(mm}^3\text{)}
+\end{equation}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Marker Detection}
+
+\subsection{Shape signature}
+
+The same PCA and OBB (Oriented Bounding Box) procedure described in
+Section~1 is applied to the marker geometry to extract three sorted extents
+$d_1 \geq d_2 \geq d_3$ along the PCA axes.  Two dimensionless ratios
+characterise the shape:
+
+\begin{equation}
+  \kappa = \frac{d_3}{d_1}
+  \quad\text{(compactness: 0 = rod-like, 1 = cubic)}
+  \qquad
+  \rho = \frac{d_2}{d_1}
+  \quad\text{(mid-axis ratio)}
+\end{equation}
+
+\subsection{Spatial grid search}
+
+The scan is divided into a regular grid with cell size $S = d_1$ (the
+marker's largest dimension).  For each occupied grid cell, a
+$(2g+1)^3$-block neighbourhood (default $g = 1$, i.e.\ $3^3 = 27$ cells)
+is gathered and scored:
+
+\begin{equation}
+  \text{score} =
+    0.45\,\bigl(1 - |\kappa_c - \kappa_m|\bigr)
+  + 0.25\,\bigl(1 - |\rho_c   - \rho_m|\bigr)
+  + 0.30\,\exp\!\left(-\frac{|d_{1,c} - d_{1,m}|}{d_{1,m}}\right)
+\end{equation}
+
+where subscript $c$ denotes the candidate neighbourhood and $m$ the marker
+reference signature.  The neighbourhood with the highest score (above a
+minimum threshold of 0.25) is declared the detected marker location.
+
+\subsection{Highlight radius}
+
+The highlighted vertex set shown in the 3-D viewer includes all scan vertices
+within a sphere of radius $r_h = 0.65\,d_{1,m}$ centred on the detected
+centroid.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{Summary of key equations}
+
+\begin{align}
+  \bar{\bm{p}}    &= \tfrac{1}{n}\textstyle\sum_i \bm{p}_i
+  \tag{Centroid} \\[4pt]
+  \bm{C}          &= \tfrac{1}{n}\textstyle\sum_i
+    (\bm{p}_i-\bar{\bm{p}})(\bm{p}_i-\bar{\bm{p}})^\top
+  \tag{Covariance} \\[4pt]
+  \hat{\bm{l}}    &= \lim_{k\to\infty}
+    \tfrac{\bm{C}^k\bm{v}_0}{\|\bm{C}^k\bm{v}_0\|}
+  \tag{Long axis} \\[4pt]
+  \hat{\bm{x}},\,\hat{\bm{y}},\,\hat{\bm{z}}
+                  &= \text{Gram-Schmidt from } \hat{\bm{l}}
+  \tag{Basis} \\[4pt]
+  \bm{M}          &= \bm{R}^\top \bm{T}_{-\bm{e}_{\mathrm{distal}}}
+  \tag{Orient transform} \\[4pt]
+  V               &= \tfrac{1}{6}\bigl|\textstyle\sum_f
+    \bm{a}_f\cdot(\bm{b}_f\times\bm{c}_f)\bigr|
+  \tag{Volume}
+\end{align}
+
+\end{document}

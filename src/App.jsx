@@ -13,6 +13,7 @@ import {
   computeVolumeOfLargestComponent,
 } from './lib/meshAnalysis.js';
 import { loadMarkerGeometry, detectMarkerInScan } from './lib/markerDetection.js';
+import { bakeGeometry, buildHighlightPositions, deleteFaces } from './lib/geometryEdit.js';
 
 function fmtFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -43,6 +44,12 @@ export default function App() {
   const [orientMethod, setOrientMethod] = useState(null);
   const [resetViewKey, setResetViewKey] = useState(0);
   const [markerRegion, setMarkerRegion] = useState(null);
+
+  // Edit mode
+  const [editMode,          setEditMode]          = useState(false);
+  const [selectedFaces,     setSelectedFaces]     = useState(null);   // Set<number>
+  const [highlightPositions, setHighlightPositions] = useState(null); // Float32Array
+  const [undoStack,         setUndoStack]         = useState([]);     // Float32Array[]
 
   const viewportRef = useRef(null);
 
@@ -193,6 +200,75 @@ export default function App() {
     setStatusMsg('Anterior direction corrected');
   }, []);
 
+  // ── Edit mode ────────────────────────────────────────────────────────────
+  const handleEnterEditMode = useCallback(() => {
+    if (!geometry) return;
+    const baked = bakeGeometry(geometry, transformedPositions);
+    setGeometry(baked);
+    setShowOriented(false);
+    setAnteriorAngle(0);
+    setMarkerRegion(null);
+    setEditMode(true);
+    setUndoStack([]);
+    setSelectedFaces(null);
+    setHighlightPositions(null);
+    setStatusMsg('Edit mode — draw a lasso to select geometry');
+  }, [geometry, transformedPositions]);
+
+  const handleFacesSelected = useCallback((faceSet) => {
+    if (!geometry || faceSet.size === 0) {
+      setSelectedFaces(null);
+      setHighlightPositions(null);
+      return;
+    }
+    const pos = geometry.attributes.position.array;
+    setSelectedFaces(faceSet);
+    setHighlightPositions(buildHighlightPositions(pos, faceSet));
+    setStatusMsg(`${faceSet.size.toLocaleString()} faces selected`);
+  }, [geometry]);
+
+  const handleDeleteSelected = useCallback(() => {
+    if (!selectedFaces || !geometry) return;
+    const pos = geometry.attributes.position.array;
+
+    // Push snapshot to undo stack
+    setUndoStack(prev => [...prev, new Float32Array(pos)]);
+
+    const newPos = deleteFaces(pos, selectedFaces);
+    const newGeo = new THREE.BufferGeometry();
+    newGeo.setAttribute('position', new THREE.BufferAttribute(newPos, 3));
+    newGeo.computeVertexNormals();
+
+    setGeometry(newGeo);
+    setSelectedFaces(null);
+    setHighlightPositions(null);
+    setStatusMsg(`Deleted ${selectedFaces.size.toLocaleString()} faces`);
+  }, [geometry, selectedFaces]);
+
+  const handleUndo = useCallback(() => {
+    setUndoStack(prev => {
+      if (prev.length === 0) return prev;
+      const stack    = [...prev];
+      const snapshot = stack.pop();
+      const newGeo   = new THREE.BufferGeometry();
+      newGeo.setAttribute('position', new THREE.BufferAttribute(snapshot, 3));
+      newGeo.computeVertexNormals();
+      setGeometry(newGeo);
+      setSelectedFaces(null);
+      setHighlightPositions(null);
+      setStatusMsg('Undo');
+      return stack;
+    });
+  }, []);
+
+  const handleExitEditMode = useCallback(() => {
+    setEditMode(false);
+    setSelectedFaces(null);
+    setHighlightPositions(null);
+    setUndoStack([]);
+    setStatusMsg('Edit complete');
+  }, []);
+
   // ── Export ───────────────────────────────────────────────────────────────
   const handleExport = useCallback(() => {
     if (!geometry || !orientTransform) return;
@@ -244,10 +320,14 @@ export default function App() {
           onAutoOrient={handleAutoOrient}
           onReset={handleReset}
           onAnteriorFacingMe={handleAnteriorFacingMe}
-          wireframe={wireframe}
-          onWireframe={setWireframe}
-          showGrid={showGrid}
-          onShowGrid={setShowGrid}
+          orientStatus={orientStatus}
+          editMode={editMode}
+          onEnterEditMode={handleEnterEditMode}
+          onDeleteSelected={handleDeleteSelected}
+          onUndo={handleUndo}
+          onExitEditMode={handleExitEditMode}
+          hasSelection={!!selectedFaces && selectedFaces.size > 0}
+          canUndo={undoStack.length > 0}
         />
 
         <Viewport3D
@@ -259,6 +339,9 @@ export default function App() {
           showGrid={showGrid}
           statusMsg={statusMsg}
           markerRegion={markerRegion}
+          editMode={editMode}
+          highlightPositions={highlightPositions}
+          onFacesSelected={handleFacesSelected}
         />
 
         <RightPanel

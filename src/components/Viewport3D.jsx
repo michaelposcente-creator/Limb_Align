@@ -1,6 +1,7 @@
-import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { selectFacesWithLasso } from '../lib/geometryEdit.js';
 
 function makeTextSprite(text, hexColor) {
   const W = 256, H = 56;
@@ -30,9 +31,17 @@ const Viewport3D = forwardRef(function Viewport3D({
   showGrid,
   statusMsg,
   markerRegion,
+  editMode,
+  highlightPositions,
+  onFacesSelected,
 }, ref) {
-  const mountRef = useRef(null);
-  const threeRef = useRef(null);
+  const mountRef  = useRef(null);
+  const svgRef    = useRef(null);
+  const threeRef  = useRef(null);
+  // Always-current refs so lasso closures don't capture stale values
+  const editModeRef        = useRef(editMode);
+  const onFacesSelectedRef = useRef(onFacesSelected);
+  const currentPosRef      = useRef(null);
 
   // Expose camera XY angle to parent for "Anterior Facing Me"
   useImperativeHandle(ref, () => ({
@@ -44,6 +53,115 @@ const Viewport3D = forwardRef(function Viewport3D({
       return Math.atan2(cam.y - tgt.y, cam.x - tgt.x);
     },
   }));
+
+  // Keep always-current refs in sync
+  useEffect(() => { editModeRef.current = editMode; }, [editMode]);
+  useEffect(() => { onFacesSelectedRef.current = onFacesSelected; }, [onFacesSelected]);
+  useEffect(() => {
+    currentPosRef.current = transformedPositions || geometry?.attributes.position.array || null;
+  }, [geometry, transformedPositions]);
+
+  // Disable orbit controls while in edit mode
+  useEffect(() => {
+    const three = threeRef.current;
+    if (!three) return;
+    three.controls.enabled = !editMode;
+  }, [editMode]);
+
+  // SVG lasso — set up once, reads live refs on each event
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    let polyEl  = null;
+    let points  = [];
+
+    function getXY(e) {
+      const r = mountRef.current.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    }
+
+    function onDown(e) {
+      if (!editModeRef.current || e.button !== 0) return;
+      e.preventDefault();
+      points  = [getXY(e)];
+      polyEl  = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      polyEl.setAttribute('fill',         'rgba(255,140,0,0.12)');
+      polyEl.setAttribute('stroke',       '#ffa500');
+      polyEl.setAttribute('stroke-width', '1.5');
+      polyEl.setAttribute('stroke-dasharray', '5,3');
+      svg.appendChild(polyEl);
+    }
+
+    function onMove(e) {
+      if (!polyEl) return;
+      points.push(getXY(e));
+      polyEl.setAttribute('points', points.map(p => `${p.x},${p.y}`).join(' '));
+    }
+
+    function onUp() {
+      if (!polyEl) return;
+      svg.removeChild(polyEl);
+      polyEl = null;
+
+      if (points.length > 2) {
+        const three = threeRef.current;
+        const pos   = currentPosRef.current;
+        if (three && pos) {
+          const mount    = mountRef.current;
+          const selected = selectFacesWithLasso(
+            pos, points, three.camera,
+            mount.clientWidth, mount.clientHeight,
+          );
+          onFacesSelectedRef.current?.(selected);
+        }
+      }
+      points = [];
+    }
+
+    svg.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup',   onUp);
+    return () => {
+      svg.removeEventListener('mousedown', onDown);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup',   onUp);
+      if (polyEl) { try { svg.removeChild(polyEl); } catch {} }
+    };
+  }, []); // runs once; reads live values through refs
+
+  // Red highlight mesh for selected faces
+  useEffect(() => {
+    const three = threeRef.current;
+    if (!three) return;
+
+    if (three.editHighlight) {
+      three.scene.remove(three.editHighlight);
+      three.editHighlight.geometry.dispose();
+      three.editHighlight.material.dispose();
+      three.editHighlight = null;
+    }
+
+    if (!highlightPositions || highlightPositions.length === 0) return;
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(highlightPositions), 3));
+    geo.computeVertexNormals();
+
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xff3333,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.72,
+      depthTest: true,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
+    });
+
+    three.editHighlight = new THREE.Mesh(geo, mat);
+    three.scene.add(three.editHighlight);
+  }, [highlightPositions]);
 
   // Initialize Three.js scene once
   useEffect(() => {
@@ -306,6 +424,11 @@ const Viewport3D = forwardRef(function Viewport3D({
   return (
     <div ref={mountRef} className="viewport-container">
       {statusMsg && <div className="status-bar">{statusMsg}</div>}
+      <svg
+        ref={svgRef}
+        className="lasso-svg"
+        style={{ cursor: editMode ? 'crosshair' : 'inherit' }}
+      />
     </div>
   );
 });

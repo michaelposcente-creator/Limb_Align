@@ -10,6 +10,14 @@ export default function LeftPanel({
   onAutoOrient,
   onReset,
   onAnteriorFacingMe,
+  orientStatus,
+  editMode,
+  onEnterEditMode,
+  onDeleteSelected,
+  onUndo,
+  onExitEditMode,
+  hasSelection,
+  canUndo,
 }) {
   const inputRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
@@ -117,6 +125,51 @@ export default function LeftPanel({
           Anterior Facing Me
         </button>
       </div>
+
+      {/* Edit Geometry — entry button (shown when oriented, not yet in edit mode) */}
+      {orientStatus === 'oriented' && !editMode && (
+        <div className="panel-section">
+          <div className="section-label">Edit Geometry</div>
+          <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginBottom: 10, lineHeight: 1.5 }}>
+            Remove unwanted geometry such as the scan marker or noise.
+          </p>
+          <button className="btn btn-secondary" onClick={onEnterEditMode}>
+            Enter Edit Mode
+          </button>
+        </div>
+      )}
+
+      {/* Edit Geometry — controls (shown while in edit mode) */}
+      {editMode && (
+        <div className="panel-section edit-mode-panel">
+          <div className="section-label edit-mode-label">Edit Geometry</div>
+          <p className="edit-mode-hint">
+            Draw a lasso around the geometry you want to remove, then click Delete.
+          </p>
+          <button
+            className="btn btn-danger"
+            disabled={!hasSelection}
+            onClick={onDeleteSelected}
+          >
+            Delete Selected
+          </button>
+          <button
+            className="btn btn-secondary"
+            disabled={!canUndo}
+            onClick={onUndo}
+            style={{ marginTop: 6 }}
+          >
+            Undo
+          </button>
+          <button
+            className="btn btn-primary"
+            onClick={onExitEditMode}
+            style={{ marginTop: 12 }}
+          >
+            Finish Editing
+          </button>
+        </div>
+      )}
 
       {/* Instructions modal */}
       {showInstructions && (
